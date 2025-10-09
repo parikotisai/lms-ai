@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Learning Quest POC</title>
+    <style>
+        /* Your existing CSS remains here */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 20px auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #0056b3;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 10px 0;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #lesson-content, #output {
+            background-color: #e9ecef;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+        }
+        #editor-container {
+            border: 1px solid #ccc;
+            height: 300px;
+            margin-top: 15px;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #007bff;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 10px;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #syllabus-container {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+        .syllabus-list {
+            list-style: none;
+            padding-left: 0;
+        }
+        .syllabus-list li {
+            background-color: #e2f0fb;
+            margin-bottom: 8px;
+            padding: 10px 15px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+        }
+        .syllabus-list li.has-subtopics {
+            background-color: #daeafc;
+            border-bottom: 1px solid #cce5ff;
+            margin-bottom: 0;
+            padding-bottom: 5px;
+            justify-content: flex-start;
+            font-size: 1.1em;
+            cursor: default;
+            text-decoration: none;
+            color: #333;
+        }
+        .syllabus-list li.has-subtopics:hover {
+            color: #333;
+        }
+        .syllabus-list li.has-subtopics button {
+            display: none !important;
+        }
+
+        .syllabus-sublist {
+            list-style: none;
+            padding-left: 20px;
+            margin-top: 0;
+            margin-bottom: 8px;
+            border-left: 3px solid #b3d9ff;
+            background-color: #f0f8ff;
+            padding-top: 5px;
+            padding-bottom: 5px;
+            border-radius: 0 0 5px 5px;
+        }
+        .syllabus-sublist li {
+            background-color: transparent;
+            margin-top: 5px;
+            margin-bottom: 5px;
+            padding: 5px 15px;
+            border-left: none;
+            font-weight: normal;
+            font-size: 0.95em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .syllabus-sublist li:last-child {
+            margin-bottom: 0;
+        }
+        #syllabus-container .syllabus-list .syllabus-sublist li button {
+            margin-left: 10px;
+            flex-shrink: 0;
+            display: inline-flex !important;
+        }
+
+        .ai-feedback-box {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #664d03;
+            padding: 15px;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 1em;
+        }
+        .ai-feedback-box h4 {
+            color: #664d03;
+            margin-top: 0;
+            margin-bottom: 5px;
+        }
+
+        #chat-container {
+            margin-top: 30px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #fcfcfc;
+            display: flex;
+            flex-direction: column;
+            height: 450px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        #chat-messages {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            border-bottom: 1px solid #eee;
+        }
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .chat-message.user {
+            background-color: #007bff;
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        .chat-message.ai {
+            background-color: #e9ecef;
+            color: #333;
+            align-self: flex-start;
+            margin-right: auto;
+            border-bottom-left-radius: 2px;
+        }
+        #chat-input-area {
+            display: flex;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-top: 1px solid #eee;
+        }
+        #chat-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-right: 10px;
+            font-size: 1em;
+        }
+        #send-chat-btn {
+            padding: 10px 20px;
+            font-size: 1em;
+            margin: 0;
+        }
+        #chatLoading {
+            margin-left: 10px;
+        }
+
+        /* --- NEW CSS FOR LOGIN/REGISTER FORMS --- */
+        #auth-section {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #fcfcfc;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        #auth-section form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 400px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            background-color: #fff;
+        }
+        #auth-section input[type="text"],
+        #auth-section input[type="email"],
+        #auth-section input[type="password"] {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        #auth-section .form-buttons button {
+            margin: 5px;
+            width: auto;
+            flex-grow: 1;
+        }
+        #auth-message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            display: none; /* Hidden by default */
+        }
+        .message-success {
+            background-color: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+        .message-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+        #current-user-display {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e6f7ff;
+            border: 1px solid #99d6ff;
+            border-radius: 5px;
+            font-weight: bold;
+            display: none; /* Hidden by default */
+        }
+        .form-switch-buttons {
+            margin-top: 15px;
+        }
+        .form-switch-buttons button {
+            background-color: #6c757d;
+            margin: 0 5px;
+        }
+        .form-switch-buttons button:hover {
+            background-color: #5a6268;
+        }
+        /* --- END NEW CSS --- */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Learning Quest - Proof of Concept</h1>
+
+        <hr>
+        <div id="auth-section">
+            <h2>User Authentication</h2>
+            <div id="auth-message"></div>
+            <div id="current-user-display"></div>
+
+            <div id="register-form-container">
+                <h3>Register</h3>
+                <form id="register-form">
+                    <input type="text" id="reg-username" placeholder="Username" required>
+                    <input type="email" id="reg-email" placeholder="Email" required>
+                    <input type="password" id="reg-password" placeholder="Password" required>
+                    <input type="password" id="reg-confirm-password" placeholder="Confirm Password" required>
+                    <div class="form-buttons">
+                        <button type="submit">Register</button>
+                    </div>
+                </form>
+                <div class="form-switch-buttons">
+                    Already have an account? <button id="show-login-btn" type="button">Login</button>
+                </div>
+            </div>
+
+            <div id="login-form-container" style="display: none;">
+                <h3>Login</h3>
+                <form id="login-form">
+                    <input type="text" id="login-identifier" placeholder="Username or Email" required>
+                    <input type="password" id="login-password" placeholder="Password" required>
+                    <div class="form-buttons">
+                        <button type="submit">Login</button>
+                    </div>
+                </form>
+                <div class="form-switch-buttons">
+                    Don't have an account? <button id="show-register-btn" type="button">Register</button>
+                </div>
+            </div>
+        </div>
+        <hr>
+
+        <h2>Syllabus</h2>
+        <button id="getSyllabusBtn">Generate Python Syllabus</button>
+        <span id="syllabusLoading" class="loading-spinner"></span>
+        <div id="syllabus-container">
+            Click "Generate Python Syllabus" to see your personalized learning path!
+        </div>
+
+        <hr>
+
+        <h2>Lesson Content</h2>
+        <div id="lesson-content">
+            Select a lesson from the syllabus to load its AI-generated explanation and code.
+        </div>
+
+        <h2>Live Code Editor</h2>
+        <div id="editor-container"></div>
+        <button id="runCodeBtn">Run Code</button>
+        <span id="runCodeLoading" class="loading-spinner"></span>
+
+        <h2>Code Output</h2>
+        <div id="output">
+            Code output will appear here.
+        </div>
+
+        <hr>
+
+        <h2>Chat with AI Sensei</h2>
+        <div id="chat-container">
+            <div id="chat-messages">
+                <div class="chat-message ai">Hello! I'm your AI Sensei. Ask me anything about Python programming!</div>
+            </div>
+            <div id="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Ask your AI Sensei a question...">
+                <button id="send-chat-btn">Send</button>
+                <span id="chatLoading" class="loading-spinner"></span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.29.1/min/vs/loader.min.js"></script>
+    <script>
+        let editor;
+
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.29.1/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            editor = monaco.editor.create(document.getElementById('editor-container'), {
+                value: 'print("Hello from Monaco Editor!")\n',
+                language: 'python',
+                theme: 'vs-light',
+                automaticLayout: true
+            });
+        });
+
+        // --- Get all element references (including new auth ones) ---
+        const getSyllabusBtn = document.getElementById('getSyllabusBtn');
+        const runCodeBtn = document.getElementById('runCodeBtn');
+        const syllabusContainer = document.getElementById('syllabus-container');
+        const lessonContentDiv = document.getElementById('lesson-content');
+        const outputDiv = document.getElementById('output');
+        const runCodeLoadingSpinner = document.getElementById('runCodeLoading');
+        const syllabusLoadingSpinner = document.getElementById('syllabusLoading');
+
+        const chatMessagesDiv = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendChatBtn = document.getElementById('send-chat-btn');
+        const chatLoadingSpinner = document.getElementById('chatLoading');
+
+        // NEW AUTH ELEMENTS
+        const registerFormContainer = document.getElementById('register-form-container');
+        const loginFormContainer = document.getElementById('login-form-container');
+        const showLoginBtn = document.getElementById('show-login-btn');
+        const showRegisterBtn = document.getElementById('show-register-btn');
+        const registerForm = document.getElementById('register-form');
+        const loginForm = document.getElementById('login-form');
+        const authMessageDiv = document.getElementById('auth-message');
+        const currentUserDisplay = document.getElementById('current-user-display');
+
+        // Global variable to store current user info
+        let currentUser = null; // Will store {username, email}
+
+
+        async function callBackend(endpoint, method, body = null) {
+            const url = `http://127.0.0.1:5000${endpoint}`;
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: body ? JSON.stringify(body) : null,
+            };
+
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`HTTP error! Status: ${response.status}, Message: ${errorData.message || errorData.error || 'Unknown error'}`);
+            }
+            return await response.json();
+        }
+
+        // --- NEW AUTH FUNCTIONS AND EVENT LISTENERS ---
+        function displayAuthMessage(message, type) {
+            authMessageDiv.textContent = message;
+            authMessageDiv.className = ''; // Clear previous classes
+            authMessageDiv.classList.add(type === 'success' ? 'message-success' : 'message-error');
+            authMessageDiv.style.display = 'block';
+        }
+
+        function clearAuthMessage() {
+            authMessageDiv.style.display = 'none';
+        }
+
+        function updateCurrentUserDisplay() {
+            if (currentUser) {
+                currentUserDisplay.textContent = `Logged in as: ${currentUser.username} (${currentUser.email})`;
+                currentUserDisplay.style.display = 'block';
+            } else {
+                currentUserDisplay.style.display = 'none';
+            }
+        }
+
+        // Register Form Submission
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission
+            clearAuthMessage();
+
+            const username = document.getElementById('reg-username').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            const confirmPassword = document.getElementById('reg-confirm-password').value;
+
+            if (password !== confirmPassword) {
+                displayAuthMessage("Passwords do not match.", "error");
+                return;
+            }
+
+            try {
+                const data = await callBackend('/register', 'POST', { username, email, password });
+                displayAuthMessage(data.message, "success");
+                // Optionally switch to login form after successful registration
+                showLoginForm();
+            } catch (error) {
+                displayAuthMessage(error.message, "error");
+                console.error('Registration error:', error);
+            }
+        });
+
+        // Login Form Submission
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission
+            clearAuthMessage();
+
+            const identifier = document.getElementById('login-identifier').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const data = await callBackend('/login', 'POST', { identifier, password });
+                displayAuthMessage(data.message, "success");
+                currentUser = { username: data.username, email: data.email };
+                updateCurrentUserDisplay();
+                // Optionally hide forms after successful login
+                registerFormContainer.style.display = 'none';
+                loginFormContainer.style.display = 'none';
+            } catch (error) {
+                displayAuthMessage(error.message, "error");
+                currentUser = null; // Clear user on failed login
+                updateCurrentUserDisplay();
+                console.error('Login error:', error);
+            }
+        });
+
+        // Form Switch Buttons
+        showLoginBtn.addEventListener('click', showLoginForm);
+        showRegisterBtn.addEventListener('click', showRegisterForm);
+
+        function showLoginForm() {
+            registerFormContainer.style.display = 'none';
+            loginFormContainer.style.display = 'block';
+            clearAuthMessage();
+        }
+
+        function showRegisterForm() {
+            registerFormContainer.style.display = 'block';
+            loginFormContainer.style.display = 'none';
+            clearAuthMessage();
+        }
+        // --- END NEW AUTH FUNCTIONS AND EVENT LISTENERS ---
+
+
+        // --- EXISTING EVENT LISTENERS (UNCHANGED) ---
+        getSyllabusBtn.addEventListener('click', async () => {
+            syllabusContainer.innerHTML = 'Generating syllabus... Please wait.';
+            syllabusLoadingSpinner.style.display = 'inline-block';
+
+            try {
+                const data = await callBackend('/generate-syllabus', 'POST', { language: 'Python' });
+                const syllabus = data.syllabus;
+
+                syllabusContainer.innerHTML = '';
+                const ul = document.createElement('ul');
+                ul.classList.add('syllabus-list');
+
+                syllabus.forEach(mainTopic => {
+                    const li = document.createElement('li');
+                    const topicTitle = document.createElement('span');
+                    topicTitle.textContent = mainTopic.title;
+                    li.appendChild(topicTitle);
+
+                    if (mainTopic.subtopics && mainTopic.subtopics.length > 0) {
+                        li.classList.add('has-subtopics');
+                        
+                        const subUl = document.createElement('ul');
+                        subUl.classList.add('syllabus-sublist');
+                        mainTopic.subtopics.forEach(subTopic => {
+                            const subLi = document.createElement('li');
+                            const subTopicTitle = document.createElement('span');
+                            subTopicTitle.textContent = subTopic;
+                            subLi.appendChild(subTopicTitle);
+
+                            const startSubLessonBtn = document.createElement('button');
+                            startSubLessonBtn.textContent = 'Start Lesson';
+                            startSubLessonBtn.onclick = () => loadLesson(subTopic);
+                            subLi.appendChild(startSubLessonBtn);
+
+                            subUl.appendChild(subLi);
+                        });
+                        li.appendChild(subUl);
+                    } else {
+                        const startLessonBtn = document.createElement('button');
+                        startLessonBtn.textContent = 'Start Lesson';
+                        startLessonBtn.onclick = () => loadLesson(mainTopic.title);
+                        li.appendChild(startLessonBtn);
+                    }
+
+                    ul.appendChild(li);
+                });
+                syllabusContainer.appendChild(ul);
+
+            } catch (error) {
+                syllabusContainer.textContent = `Failed to generate syllabus: ${error.message}`;
+                console.error('Error:', error);
+            } finally {
+                syllabusLoadingSpinner.style.display = 'none';
+            }
+        });
+
+        async function loadLesson(conceptName) {
+            lessonContentDiv.innerHTML = `Loading lesson for "<strong>${conceptName}</strong>"...`;
+            lessonContentDiv.style.color = '#333';
+            editor.setValue('');
+            outputDiv.innerHTML = 'Code output will appear here.';
+            outputDiv.style.color = '#333';
+
+            lessonContentDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            try {
+                const data = await callBackend('/generate-lesson', 'POST', { concept: conceptName });
+                lessonContentDiv.innerHTML = data.explanation;
+                editor.setValue(data.code_example);
+            } catch (error) {
+                lessonContentDiv.innerHTML = `Failed to load lesson for "<strong>${conceptName}</strong>": ${error.message}`;
+                lessonContentDiv.style.color = 'red';
+                console.error('Error:', error);
+            }
+        }
+
+        runCodeBtn.addEventListener('click', async () => {
+            const code = editor.getValue();
+            outputDiv.innerHTML = 'Running code...';
+            outputDiv.style.color = '#333';
+            runCodeLoadingSpinner.style.display = 'inline-block';
+
+            try {
+                const data = await callBackend('/run-code', 'POST', { code: code });
+
+                if (data.raw_error) {
+                    let aiFeedbackHtml = '';
+                    if (data.ai_feedback) {
+                        try {
+                            const aiFeedbackParsed = JSON.parse(data.ai_feedback);
+                            aiFeedbackHtml = `
+                                <div class="ai-feedback-box">
+                                    <h4>AI Sensei's Feedback:</h4>
+                                    <p><strong>Explanation:</strong> ${aiFeedbackParsed.explanation}</p>
+                                    <p><strong>Suggestion:</strong> ${aiFeedbackParsed.suggestion}</p>
+                                </div>
+                            `;
+                        } catch (parseError) {
+                            console.error('Failed to parse AI feedback JSON:', parseError);
+                            aiFeedbackHtml = `<p style="color:orange;">Warning: Could not parse AI feedback. Raw AI response: ${data.ai_feedback}</p>`;
+                        }
+                    }
+
+                    outputDiv.innerHTML = `
+                        <p style="color: red;"><strong>Raw Error:</strong> ${data.raw_error}</p>
+                        ${aiFeedbackHtml}
+                    `;
+                    outputDiv.style.color = 'red';
+                } else {
+                    outputDiv.innerHTML = `Output:\n${data.output}`;
+                    outputDiv.style.color = 'green';
+                }
+            } catch (error) {
+                outputDiv.innerHTML = `Failed to run code: ${error.message}`;
+                outputDiv.style.color = 'red';
+                console.error('Error:', error);
+            } finally {
+                runCodeLoadingSpinner.style.display = 'none';
+            }
+        });
+
+        function addMessageToChat(sender, message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('chat-message', sender);
+            messageDiv.textContent = message;
+            chatMessagesDiv.appendChild(messageDiv);
+            chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+        }
+
+        sendChatBtn.addEventListener('click', async () => {
+            const userMessage = chatInput.value.trim();
+            if (!userMessage) return;
+
+            addMessageToChat('user', userMessage);
+            chatInput.value = '';
+
+            chatLoadingSpinner.style.display = 'inline-block';
+
+            try {
+                const data = await callBackend('/chat-with-ai', 'POST', { message: userMessage });
+                addMessageToChat('ai', data.response);
+            } catch (error) {
+                addMessageToChat('ai', `I'm sorry, I encountered an error: ${error.message}`);
+                console.error('Chat error:', error);
+            } finally {
+                chatLoadingSpinner.style.display = 'none';
+            }
+        });
+
+        chatInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                sendChatBtn.click();
+            }
+        });
+
+    </script>
+</body>
+</html>
