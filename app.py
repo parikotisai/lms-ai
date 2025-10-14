@@ -50,7 +50,7 @@ if GROQ_API_KEY:
 # --- CHOOSE YOUR DEFAULT LLM PROVIDER HERE ---
 DEFAULT_LLM_PROVIDER = 'GROQ' # <--- Set your preferred default here
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None, template_folder=None)
 CORS(app)
 
 # --- NEW: Database Configuration ---
@@ -72,6 +72,77 @@ class User(db.Model):
 
     def __repr__(self):
         return f'<User {self.username}>'
+
+
+# --- Progressive Learning Configuration ---
+DIFFICULTY_LESSON_PROGRESSION = {
+    'Easy': {
+        'lessons_1_3': {
+            'allowed_concepts': ['print', 'comments', 'hello world', 'basic output'],
+            'avoid': ['functions', 'classes', 'imports', 'loops', 'conditionals', 'variables'],
+            'max_lines': 5,
+            'example_type': 'hello_world'
+        },
+        'lessons_4_6': {
+            'allowed_concepts': ['variables', 'assignment', 'data types', 'basic math'],
+            'avoid': ['functions', 'classes', 'imports', 'loops', 'conditionals'],
+            'max_lines': 8,
+            'example_type': 'variables_and_types'
+        },
+        'lessons_7_10': {
+            'allowed_concepts': ['conditionals', 'if-else', 'comparison', 'basic loops'],
+            'avoid': ['functions', 'classes', 'imports', 'complex loops'],
+            'max_lines': 12,
+            'example_type': 'simple_control_flow'
+        },
+        'lessons_11_15': {
+            'allowed_concepts': ['simple functions', 'basic loops', 'lists', 'strings'],
+            'avoid': ['classes', 'complex imports', 'advanced concepts'],
+            'max_lines': 15,
+            'example_type': 'basic_functions'
+        },
+        'lessons_16_plus': {
+            'allowed_concepts': ['all basic concepts'],
+            'avoid': ['advanced OOP', 'decorators', 'generators'],
+            'max_lines': 20,
+            'example_type': 'intermediate_basics'
+        }
+    },
+    'Medium': {
+        'lessons_1_3': {
+            'allowed_concepts': ['functions', 'basic program structure', 'imports'],
+            'avoid': ['complex classes', 'decorators', 'generators'],
+            'max_lines': 15,
+            'example_type': 'function_basics'
+        },
+        'lessons_4_8': {
+            'allowed_concepts': ['functions', 'loops', 'conditionals', 'data structures'],
+            'avoid': ['complex OOP', 'decorators', 'advanced patterns'],
+            'max_lines': 25,
+            'example_type': 'intermediate_programming'
+        },
+        'lessons_9_plus': {
+            'allowed_concepts': ['classes', 'file I/O', 'error handling', 'modules'],
+            'avoid': ['decorators', 'metaclasses', 'advanced patterns'],
+            'max_lines': 35,
+            'example_type': 'intermediate_advanced'
+        }
+    },
+    'Hard': {
+        'lessons_1_3': {
+            'allowed_concepts': ['OOP', 'design patterns', 'architecture'],
+            'avoid': [],
+            'max_lines': 40,
+            'example_type': 'advanced_concepts'
+        },
+        'lessons_4_plus': {
+            'allowed_concepts': ['all concepts', 'advanced patterns', 'optimization'],
+            'avoid': [],
+            'max_lines': 50,
+            'example_type': 'expert_level'
+        }
+    }
+}
 
 
 # --- Language Configuration ---
@@ -226,6 +297,159 @@ const localStorage = window.localStorage;
 
 '''
     return browser_simulation + '\n' + code
+
+
+# --- Progressive Learning Helper Functions ---
+def extract_lesson_number(concept):
+    """
+    Extract lesson number from concept title
+    Examples: "Lesson 1: Introduction" -> 1, "Introduction to Python" -> 1
+    """
+    import re
+    # Try to match "Lesson X:" pattern
+    match = re.search(r'[Ll]esson\s+(\d+)', concept)
+    if match:
+        return int(match.group(1))
+    
+    # Check if it's an introduction (assume Lesson 1)
+    if 'introduction' in concept.lower() or 'intro to' in concept.lower():
+        return 1
+    
+    # Default to lesson 1 if we can't determine
+    return 1
+
+
+def get_lesson_constraints(difficulty, lesson_number):
+    """
+    Get appropriate content constraints based on difficulty and lesson number
+    """
+    progression = DIFFICULTY_LESSON_PROGRESSION.get(difficulty, DIFFICULTY_LESSON_PROGRESSION['Medium'])
+    
+    # Determine which lesson range this falls into
+    if lesson_number <= 3:
+        key = 'lessons_1_3'
+    elif lesson_number <= 6 and difficulty == 'Easy':
+        key = 'lessons_4_6'
+    elif lesson_number <= 8 and difficulty == 'Medium':
+        key = 'lessons_4_8'
+    elif lesson_number <= 10 and difficulty == 'Easy':
+        key = 'lessons_7_10'
+    elif lesson_number <= 15 and difficulty == 'Easy':
+        key = 'lessons_11_15'
+    elif difficulty == 'Medium':
+        key = 'lessons_9_plus'
+    elif difficulty == 'Hard' and lesson_number <= 3:
+        key = 'lessons_1_3'
+    elif difficulty == 'Hard':
+        key = 'lessons_4_plus'
+    else:
+        key = 'lessons_16_plus' if difficulty == 'Easy' else list(progression.keys())[-1]
+    
+    return progression.get(key, progression[list(progression.keys())[0]])
+
+
+def detect_lesson_type(concept):
+    """
+    Detect if lesson is theory-focused or code-focused
+    Returns: 'theory' or 'code'
+    
+    Theory lessons: Rich conceptual explanations without mandatory code
+    Code lessons: Practical examples with working code
+    """
+    concept_lower = concept.lower()
+    
+    # Theory-focused keywords (conceptual understanding)
+    theory_keywords = [
+        'introduction', 'intro to', 'overview', 'history', 'features', 
+        'advantages', 'disadvantages', 'benefits', 'comparison', 'vs',
+        'what is', 'why use', 'when to use', 'philosophy', 'principles',
+        'concepts', 'fundamentals', 'basics of', 'getting started',
+        'architecture', 'ecosystem', 'community', 'use cases',
+        'applications', 'best practices', 'conventions', 'style guide'
+    ]
+    
+    # Code-focused keywords (hands-on programming)
+    code_keywords = [
+        'variable', 'function', 'loop', 'conditional', 'if', 'else',
+        'array', 'list', 'dictionary', 'object', 'class', 'method',
+        'operator', 'expression', 'statement', 'syntax', 'data type',
+        'string', 'number', 'boolean', 'null', 'undefined',
+        'input', 'output', 'print', 'return', 'parameter', 'argument',
+        'scope', 'closure', 'callback', 'promise', 'async', 'await',
+        'exception', 'error handling', 'debugging', 'testing'
+    ]
+    
+    # Check for theory keywords
+    for keyword in theory_keywords:
+        if keyword in concept_lower:
+            return 'theory'
+    
+    # Check for code keywords
+    for keyword in code_keywords:
+        if keyword in concept_lower:
+            return 'code'
+    
+    # Default: if lesson number 1-2, lean towards theory; otherwise code
+    lesson_num = extract_lesson_number(concept)
+    return 'theory' if lesson_num <= 2 else 'code'
+
+
+def build_example_template(language, difficulty, lesson_number, concept):
+    """
+    Build specific example templates based on lesson progression
+    """
+    constraints = get_lesson_constraints(difficulty, lesson_number)
+    example_type = constraints['example_type']
+    
+    templates = {
+        'python': {
+            'hello_world': 'Only use: print("Hello, World!") with simple string. NO variables, NO functions.',
+            'variables_and_types': 'Use simple variable assignments (x = 5, name = "text") and print them. NO functions.',
+            'simple_control_flow': 'Use simple if-else with basic conditions. Use simple for/while loops. NO functions yet.',
+            'basic_functions': 'Now you can introduce simple functions with 1-2 parameters. Keep it very simple.',
+            'function_basics': 'Show function definition, parameters, return values. Keep examples practical.',
+            'intermediate_programming': 'Use functions, loops, data structures. Build on previous concepts.',
+            'intermediate_advanced': 'Introduce classes, file operations, error handling.',
+            'advanced_concepts': 'Show design patterns, OOP principles, architecture.',
+            'expert_level': 'Advanced patterns, optimization, complex scenarios.'
+        },
+        'javascript': {
+            'hello_world': 'Only use: console.log("Hello, World!") with simple string. NO variables, NO functions.',
+            'variables_and_types': 'Use let/const with simple assignments and console.log. NO functions.',
+            'simple_control_flow': 'Use simple if-else and basic for loops. NO functions yet.',
+            'basic_functions': 'Now introduce simple arrow functions or function declarations.',
+            'function_basics': 'Show function definition, parameters, return values, arrow functions.',
+            'intermediate_programming': 'Use functions, arrays, objects, array methods.',
+            'intermediate_advanced': 'Introduce classes, async/await, modules.',
+            'advanced_concepts': 'Show design patterns, closures, prototypes.',
+            'expert_level': 'Advanced patterns, performance optimization, complex apps.'
+        },
+        'java': {
+            'hello_world': 'Only System.out.println("Hello, World!") inside main method. Keep it minimal.',
+            'variables_and_types': 'Simple variable declarations and printing. Stay in main method.',
+            'simple_control_flow': 'Use if-else and basic loops in main method. NO separate methods yet.',
+            'basic_functions': 'Now introduce simple static methods.',
+            'function_basics': 'Show method definition, parameters, return types.',
+            'intermediate_programming': 'Use methods, arrays, ArrayList basics.',
+            'intermediate_advanced': 'Introduce classes, objects, inheritance.',
+            'advanced_concepts': 'Show design patterns, interfaces, abstract classes.',
+            'expert_level': 'Advanced OOP, streams, concurrency, design patterns.'
+        },
+        'csharp': {
+            'hello_world': 'Only Console.WriteLine("Hello, World!") in Main. Keep minimal.',
+            'variables_and_types': 'Simple variable declarations and Console.WriteLine.',
+            'simple_control_flow': 'Use if-else and basic loops in Main. NO separate methods.',
+            'basic_functions': 'Introduce simple static methods.',
+            'function_basics': 'Show method definition, parameters, return types.',
+            'intermediate_programming': 'Use methods, arrays, List basics.',
+            'intermediate_advanced': 'Introduce classes, properties, LINQ basics.',
+            'advanced_concepts': 'Show design patterns, interfaces, generics.',
+            'expert_level': 'Advanced C# features, async/await, design patterns.'
+        }
+    }
+    
+    return templates.get(language, templates['python']).get(example_type, '')
+
 
 # --- Helper function to make API calls to chosen provider ---
 def call_llm(messages_list, provider, response_format_type=None, temperature=0.7, max_tokens=1024):
@@ -839,12 +1063,28 @@ def generate_lesson():
     is_selenium = data.get('isSelenium', False)
     framework = data.get('framework')  # NEW: Framework-specific context
     
-    # *** IMPORTANT FIX: Extract difficulty and skill level ***
+    # *** PROGRESSIVE LEARNING: Extract difficulty, skill level, and lesson number ***
     difficulty = data.get('difficulty', 'Medium')
     skill_level = data.get('skillLevel', 'Intermediate')
-
+    lesson_number = extract_lesson_number(concept)  # NEW: Extract lesson position
+    lesson_type = detect_lesson_type(concept)  # NEW: Detect if theory or code-focused
+    
     if not concept:
         return jsonify({"error": "Concept not provided"}), 400
+    
+    # *** PROGRESSIVE LEARNING: Get appropriate constraints for this lesson ***
+    lesson_constraints = get_lesson_constraints(difficulty, lesson_number)
+    example_template = build_example_template(
+        language if not (is_selenium and sub_language) else sub_language,
+        difficulty,
+        lesson_number,
+        concept
+    )
+    
+    # Adjust max_tokens based on lesson type
+    # Theory lessons need more tokens for comprehensive explanations
+    # Code lessons need moderate tokens for explanation + code
+    max_tokens_for_lesson = 3072 if lesson_type == 'theory' else 1536
 
     # Framework-specific configurations
     framework_configs = {
@@ -990,105 +1230,206 @@ def generate_lesson():
         assertion_style = ""
         lifecycle_methods = ""
 
-    # *** IMPORTANT FIX: Create difficulty-specific instructions ***
-    difficulty_instructions = {
-        'Easy': {
-            'level_description': 'absolute beginner level',
-            'code_complexity': 'very simple, basic concepts only',
-            'concepts_to_avoid': 'Avoid complex imports, classes, advanced functions, servers, networking, or multi-threading',
-            'preferred_concepts': 'Use basic variables, simple functions, print statements, basic math, strings, and lists',
-            'max_lines': '10-15 lines maximum'
-        },
-        'Medium': {
-            'level_description': 'intermediate level',
-            'code_complexity': 'moderate complexity with some advanced concepts',
-            'concepts_to_avoid': 'Avoid overly complex architectures or advanced design patterns',
-            'preferred_concepts': 'Can include functions, loops, conditionals, basic classes, and simple imports',
-            'max_lines': '20-30 lines'
-        },
-        'Hard': {
-            'level_description': 'advanced level',
-            'code_complexity': 'complex concepts and real-world applications',
-            'concepts_to_avoid': 'No restrictions',
-            'preferred_concepts': 'Can include complex classes, design patterns, advanced libraries, networking, etc.',
-            'max_lines': '30+ lines'
-        }
-    }
+    # *** PROGRESSIVE LEARNING: Use lesson-specific constraints ***
     
-    current_difficulty = difficulty_instructions.get(difficulty, difficulty_instructions['Medium'])
-
+    # Build different prompts for theory vs code lessons
+    if lesson_type == 'theory':
+        # Theory-focused prompt: Emphasize comprehensive explanation, code is optional
+        system_prompt = f"""You are an expert, friendly, and patient {language_context} instructor.
+        
+        ═══════════════════════════════════════════════════════════════════
+        📚 LESSON TYPE: THEORY / CONCEPTUAL
+        ═══════════════════════════════════════════════════════════════════
+        This is a THEORY-FOCUSED lesson about: {concept}
+        
+        Your goal: Provide a COMPREHENSIVE, DETAILED explanation of the concept.
+        Code examples are OPTIONAL - only include if they genuinely enhance understanding.
+        
+        ═══════════════════════════════════════════════════════════════════
+        📋 LESSON CONTEXT
+        ═══════════════════════════════════════════════════════════════════
+        Difficulty: {difficulty}
+        Skill Level: {skill_level}
+        Lesson Number: {lesson_number}
+        Language: {language_context}
+        Domain: {domain.replace('-', ' ').title()}
+        {f"Framework: {framework}" if framework else ""}
+        
+        ═══════════════════════════════════════════════════════════════════
+        ✅ WHAT TO INCLUDE (Theory Lesson)
+        ═══════════════════════════════════════════════════════════════════
+        
+        1. **Clear Definition**: What is {concept}?
+        2. **Why It Matters**: Importance and benefits
+        3. **Key Characteristics**: Main features and properties
+        4. **Real-World Applications**: Where/when it's used
+        5. **Comparison** (if relevant): How it compares to alternatives
+        6. **Best Practices**: Important guidelines
+        7. **Common Use Cases**: Practical scenarios
+        
+        **Code Example**: OPTIONAL - Only include if it truly helps illustrate the concept.
+        If no code is needed, set "code_example" to an empty string "".
+        
+        ═══════════════════════════════════════════════════════════════════
+        � RESPONSE FORMAT (STRICT JSON)
+        ═══════════════════════════════════════════════════════════════════
+        
+        {{
+            "lesson_type": "theory",
+            "explanation": "A comprehensive, detailed explanation covering all key aspects of {concept}. Use markdown formatting: **bold** for emphasis, bullet points for lists, numbered lists for steps. Make this rich and informative (300-600 words).",
+            "code_example": "Optional: A simple illustrative example ONLY if it enhances understanding. Otherwise empty string. If included, keep it minimal and focused on the concept, not complex implementation."
+        }}
+        
+        ⚠️ CRITICAL: Make the explanation RICH and COMPREHENSIVE. This is theory, so focus on deep understanding!
+        """
+    else:
+        # Code-focused prompt: Balanced explanation with mandatory practical example
+        system_prompt = f"""You are an expert, friendly, and patient {language_context} instructor.
+        
+        ═══════════════════════════════════════════════════════════════════
+        💻 LESSON TYPE: CODE / PRACTICAL
+        ═══════════════════════════════════════════════════════════════════
+        This is a CODE-FOCUSED lesson about: {concept}
+        
+        Your goal: Provide a clear explanation WITH a practical, working code example.
+        
+        ═══════════════════════════════════════════════════════════════════
+        📋 LESSON CONTEXT
+        ═══════════════════════════════════════════════════════════════════
+        Difficulty: {difficulty}
+        Skill Level: {skill_level}
+        Lesson Number: {lesson_number}
+        Language: {language_context}
+        Domain: {domain.replace('-', ' ').title()}
+        {f"Framework: {framework} - {framework_focus}" if framework and framework_focus else ""}
+        
+        ═══════════════════════════════════════════════════════════════════
+        🎯 STRICT LESSON-SPECIFIC REQUIREMENTS (Lesson {lesson_number})
+        ═══════════════════════════════════════════════════════════════════
+        
+        ALLOWED CONCEPTS FOR THIS LESSON:
+        {', '.join(lesson_constraints['allowed_concepts'])}
+        
+        CONCEPTS TO STRICTLY AVOID:
+        {', '.join(lesson_constraints['avoid'])}
+        
+        MAXIMUM CODE LENGTH: {lesson_constraints['max_lines']} lines
+        
+        EXAMPLE TEMPLATE GUIDANCE:
+        {example_template}
+        
+        ═══════════════════════════════════════════════════════════════════
+        ⚠️ CRITICAL RULES - MUST FOLLOW
+        ═══════════════════════════════════════════════════════════════════
+        
+        1. This is LESSON {lesson_number} - The learner has NOT learned concepts from future lessons yet!
+        2. DO NOT use any concepts from the "AVOID" list above
+        3. ONLY use concepts from the "ALLOWED" list above
+        4. Keep code under {lesson_constraints['max_lines']} lines
+        5. Build ONLY on concepts from lessons 1 through {lesson_number}
+        6. Make the example IMMEDIATELY runnable and understandable
+        
+        For Lesson 1 (Introduction): Use ONLY print/console.log with simple strings. NO variables!
+        For Lessons 2-3: Can add simple variables if allowed
+        For Lessons 4-6: Can add conditionals/loops if allowed
+        For Lessons 7+: Can gradually introduce more concepts if allowed
+        
+        ═══════════════════════════════════════════════════════════════════
+        {f'''🔧 FRAMEWORK-SPECIFIC REQUIREMENTS ({framework})
+        ═══════════════════════════════════════════════════════════════════
+        Test Structure: {test_structure}
+        Imports: {import_statement}
+        Patterns: {framework_patterns}
+        Setup/Teardown: {framework_setup}
+        Assertions: {assertion_style}
+        Lifecycle: {lifecycle_methods}
+        Focus: {framework_focus}
+        ═══════════════════════════════════════════════════════════════════
+        ''' if framework and framework_info else ''}
+        
+        ═══════════════════════════════════════════════════════════════════
+        📋 RESPONSE FORMAT (STRICT JSON)
+        ═══════════════════════════════════════════════════════════════════
+        
+        You MUST respond with a JSON object. Do NOT include any conversational filler, greetings, or additional text outside the JSON.
+        The JSON structure must be:
+        {{
+            "lesson_type": "code",
+            "explanation": "A clear explanation of {concept} appropriate for Lesson {lesson_number} at {difficulty} level (150-300 words).",
+            "code_example": "Working code example using ONLY the allowed concepts listed above. Maximum {lesson_constraints['max_lines']} lines. REQUIRED for code lessons."
+        }}
+        
+        ═══════════════════════════════════════════════════════════════════
+        🎨 CODE EXAMPLE REQUIREMENTS
+        ═══════════════════════════════════════════════════════════════════
+        - Language: {example_language}
+        - Follow the EXAMPLE TEMPLATE GUIDANCE exactly
+        - Use ONLY concepts from the ALLOWED list
+        - Maximum {lesson_constraints['max_lines']} lines of code
+        - Include helpful comments for beginners
+        {f"- Use {framework} framework patterns: {framework_patterns}" if framework else ""}
+        {f"- Required imports: {import_statement}" if import_statement else ""}
+        {f"- Use {assertion_style} for validations" if assertion_style and framework else ""}
+        {f"- Include {lifecycle_methods}" if lifecycle_methods and framework else ""}
+        
+        ═══════════════════════════════════════════════════════════════════
+        ✅ VALIDATION CHECKLIST (Must pass ALL)
+        ═══════════════════════════════════════════════════════════════════
+        [ ] Code uses ONLY allowed concepts
+        [ ] Code avoids ALL forbidden concepts
+        [ ] Code length ≤ {lesson_constraints['max_lines']} lines
+        [ ] Example is appropriate for Lesson {lesson_number}
+        [ ] JSON is perfectly valid (no triple quotes inside strings)
+        [ ] Code is immediately runnable by a beginner
+        
+        **CRITICAL:** Escape internal quotes properly (use \\" for quotes inside JSON strings).
+        """
+    
+    # Create the messages list using the appropriate system prompt
     prompt_messages = [
         {
             "role": "system",
-            "content": f"""You are an expert, friendly, and patient {language_context} instructor.
-            Your sole purpose is to explain a programming concept to learners and provide an appropriate code example.
-            
-            DIFFICULTY LEVEL: {difficulty} ({current_difficulty['level_description']})
-            SKILL LEVEL: {skill_level}
-            Language: {language_context}
-            Domain focus: {domain.replace('-', ' ').title()}
-            {f"Framework: {framework} - {framework_focus}" if framework and framework_focus else ""}
-            
-            IMPORTANT DIFFICULTY GUIDELINES:
-            - Code complexity: {current_difficulty['code_complexity']}
-            - {current_difficulty['concepts_to_avoid']}
-            - {current_difficulty['preferred_concepts']}
-            - Code length: {current_difficulty['max_lines']}
-            
-            {f'''FRAMEWORK-SPECIFIC REQUIREMENTS ({framework}):
-            - Test Structure: {test_structure}
-            - Imports: {import_statement}
-            - Patterns: {framework_patterns}
-            - Setup/Teardown: {framework_setup}
-            - Assertions: {assertion_style}
-            - Lifecycle: {lifecycle_methods}
-            - Focus: {framework_focus}''' if framework and framework_info else ''}
-            
-            You MUST respond with a JSON object. Do NOT include any conversational filler, greetings, or additional text outside the JSON.
-            The JSON structure must be:
-            {{
-                "explanation": "A multi-line string containing the explanation points for {language_context} at {difficulty} difficulty level{f' using {framework} framework patterns' if framework else ''}.",
-                "code_example": "A multi-line string containing the {code_type} code example appropriate for {difficulty} difficulty{f' following {framework} framework conventions' if framework else ''}."
-            }}
-            
-            For the code example:
-            - Use {example_language} syntax
-            {f"- Use {framework} framework structure and patterns" if framework else ""}
-            {f"- Include proper imports: {import_statement}" if import_statement else ""}
-            {f"- Follow {framework} best practices for {framework_patterns}" if framework_patterns else ""}
-            {f"- Use {assertion_style} for validations" if assertion_style else ""}
-            {f"- Include proper {lifecycle_methods} for test lifecycle" if lifecycle_methods else ""}
-            - Make it appropriate for {difficulty} difficulty level
-            - Include comments explaining key parts
-            - Focus on {domain.replace('-', ' ')} concepts where relevant
-            - STRICTLY follow the difficulty guidelines above
-            {f"- Demonstrate {framework}-specific features and best practices" if framework else ""}
-            
-            Ensure the JSON is perfectly valid and complete.
-            **IMPORTANT:** For the 'code_example' value, ensure the code is formatted as a standard string.
-            DO NOT use triple quotes (''' or \"\"\") within the 'code_example' string, as this invalidates the JSON.
-            Escape any internal double quotes if necessary (e.g., use \\" instead of ").
-            """
+            "content": system_prompt
         },
-        {"role": "user", "content": f"Explain \"{concept}\" in {language_context} with a code example suitable for {difficulty} difficulty level ({skill_level} skill level){f' using {framework} framework' if framework else ''}."}
+        {
+            "role": "user", 
+            "content": f"Generate Lesson {lesson_number} ({'THEORY' if lesson_type == 'theory' else 'CODE'}) content: \"{concept}\" for {difficulty} level ({skill_level} skill) in {language_context}{f' using {framework}' if framework else ''}."
+        }
     ]
 
     try:
-        ai_output = call_llm(prompt_messages, DEFAULT_LLM_PROVIDER, response_format_type="json_object", max_tokens=1024)
+        ai_output = call_llm(prompt_messages, DEFAULT_LLM_PROVIDER, response_format_type="json_object", max_tokens=max_tokens_for_lesson)
         
         # Parse the AI response JSON and return as proper Flask response
         try:
             import json
             parsed_response = json.loads(ai_output)
+            
+            # Ensure lesson_type is included in response
+            if 'lesson_type' not in parsed_response:
+                parsed_response['lesson_type'] = lesson_type
+            
+            # For theory lessons, ensure code_example exists (can be empty string)
+            if lesson_type == 'theory' and 'code_example' not in parsed_response:
+                parsed_response['code_example'] = ""
+            
+            # DEBUG: Log what we're sending to frontend
+            logger.info(f"📚 Lesson Generated - Type: {lesson_type}, Concept: {concept}")
+            logger.info(f"📊 Response keys: {list(parsed_response.keys())}")
+            logger.info(f"📝 Explanation length: {len(parsed_response.get('explanation', ''))} chars")
+            logger.info(f"💻 Code example length: {len(parsed_response.get('code_example', ''))} chars")
+            
             return jsonify(parsed_response), 200
         except json.JSONDecodeError as json_err:
             print(f"Error parsing AI response JSON: {json_err}")
             print(f"Raw AI response: {ai_output}")
             # Fallback response if AI doesn't return valid JSON
-            return jsonify({
+            fallback_response = {
+                "lesson_type": lesson_type,
                 "explanation": f"This lesson covers: {concept}",
-                "code_example": f"# {concept} example\n# Your code here"
-            }), 200
+                "code_example": f"# {concept} example\n# Your code here" if lesson_type == 'code' else ""
+            }
+            return jsonify(fallback_response), 200
     except Exception as e:
         print(f"Error generating lesson content from {DEFAULT_LLM_PROVIDER}: {e}")
         return jsonify({"error": f"Failed to generate lesson content: {str(e)}"}), 500
@@ -1676,6 +2017,49 @@ def health_check():
         'supported_languages': list(SUPPORTED_LANGUAGES.keys()),
         'llm_provider': DEFAULT_LLM_PROVIDER
     })
+
+
+# --- API-compatible Routes (for frontend compatibility) ---
+@app.route('/api/ai/syllabus', methods=['POST'])
+def api_generate_syllabus():
+    """API-compatible route for syllabus generation"""
+    return generate_syllabus()
+
+
+@app.route('/api/ai/lesson', methods=['POST'])
+def api_generate_lesson():
+    """API-compatible route for lesson generation"""
+    return generate_lesson()
+
+
+@app.route('/api/ai/chat', methods=['POST'])
+def api_chat_with_ai():
+    """API-compatible route for AI chat"""
+    return chat_with_ai()
+
+
+@app.route('/api/ai/run', methods=['POST'])
+def api_run_code():
+    """API-compatible route for code execution"""
+    return run_code()
+
+
+@app.route('/api/ai/explain', methods=['POST'])
+def api_explain_code():
+    """API-compatible route for code explanation"""
+    return explain_code()
+
+
+@app.route('/api/auth/register', methods=['POST'])
+def api_register():
+    """API-compatible route for user registration"""
+    return register()
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_login():
+    """API-compatible route for user login"""
+    return login()
 
 
 if __name__ == '__main__':
