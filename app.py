@@ -51,7 +51,23 @@ if GROQ_API_KEY:
 DEFAULT_LLM_PROVIDER = 'GROQ' # <--- Set your preferred default here
 
 app = Flask(__name__, static_folder=None, template_folder=None)
-CORS(app)
+
+# CORS configuration - Allow specific origins for security
+# In production, this will only allow your LMS API server to access the AI service
+allowed_origins = [
+    'http://localhost:5010',      # Local API server
+    'http://127.0.0.1:5010',      # Local API server (alternative)
+    'http://localhost:5173',      # Local frontend (for direct testing)
+    'https://lms.bytesfersolutions.com',  # Production frontend
+    'http://lms.bytesfersolutions.com'    # Production frontend (HTTP)
+]
+
+# Add custom origin from environment if provided
+frontend_url = os.getenv('FRONTEND_URL')
+if frontend_url and frontend_url not in allowed_origins:
+    allowed_origins.append(frontend_url)
+
+CORS(app, origins=allowed_origins, supports_credentials=True)
 
 # --- NEW: Database Configuration ---
 # Use SQLite for development. The database file will be named 'site.db' in the project folder.
