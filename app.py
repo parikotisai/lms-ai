@@ -650,9 +650,54 @@ def execute_javascript_code(code_to_run):
         }), 200
 
 
+def auto_wrap_java_code(code):
+    """
+    Auto-wrap Java code in a proper class structure if missing.
+    This allows simple code snippets like System.out.println() to work.
+    """
+    # Check if code already has a public class
+    if re.search(r'public\s+class\s+\w+', code):
+        return code
+    
+    # Check if code has any class definition
+    if re.search(r'class\s+\w+', code):
+        # Has a class but not public - make it public Main
+        code = re.sub(r'class\s+(\w+)', 'public class Main', code, count=1)
+        return code
+    
+    # Check if it has a main method but no class
+    if re.search(r'public\s+static\s+void\s+main', code):
+        return f"public class Main {{\n{code}\n}}"
+    
+    # It's just code statements - wrap it in full structure
+    # Remove any Python-style print statements
+    code = re.sub(r'\bprint\s*\(([^)]*)\)', r'System.out.println(\1)', code)
+    
+    # Clean up the code - remove any non-Java syntax
+    lines = code.strip().split('\n')
+    cleaned_lines = []
+    for line in lines:
+        # Skip Python-style comments at beginning, keep Java comments
+        if line.strip().startswith('#') and not line.strip().startswith('//'):
+            line = line.replace('#', '//', 1)
+        cleaned_lines.append(line)
+    
+    cleaned_code = '\n        '.join(cleaned_lines)
+    
+    wrapped = f"""public class Main {{
+    public static void main(String[] args) {{
+        {cleaned_code}
+    }}
+}}"""
+    return wrapped
+
+
 def execute_java_code(code_to_run):
     """Execute Java code (basic implementation)"""
     try:
+        # Auto-wrap code if it doesn't have proper class structure
+        code_to_run = auto_wrap_java_code(code_to_run)
+        
         # Extract class name from code
         class_match = re.search(r'public\s+class\s+(\w+)', code_to_run)
         if not class_match:
@@ -729,9 +774,53 @@ def execute_java_code(code_to_run):
         }), 200
 
 
+def auto_wrap_csharp_code(code):
+    """
+    Auto-wrap C# code in a proper class structure if missing.
+    This allows simple code snippets like Console.WriteLine() to work.
+    """
+    # Check if code already has a class definition
+    if re.search(r'class\s+\w+', code):
+        # Ensure it has 'using System;' at the top
+        if 'using System;' not in code:
+            code = 'using System;\n\n' + code
+        return code
+    
+    # Check if it has a Main method but no class
+    if re.search(r'static\s+void\s+Main', code):
+        code = f"using System;\n\nclass Program {{\n{code}\n}}"
+        return code
+    
+    # It's just code statements - wrap it in full structure
+    # Convert Python-style print to C# Console.WriteLine
+    code = re.sub(r'\bprint\s*\(([^)]*)\)', r'Console.WriteLine(\1)', code)
+    
+    # Clean up the code - convert Python comments to C# comments
+    lines = code.strip().split('\n')
+    cleaned_lines = []
+    for line in lines:
+        if line.strip().startswith('#') and not line.strip().startswith('//'):
+            line = line.replace('#', '//', 1)
+        cleaned_lines.append(line)
+    
+    cleaned_code = '\n        '.join(cleaned_lines)
+    
+    wrapped = f"""using System;
+
+class Program {{
+    static void Main() {{
+        {cleaned_code}
+    }}
+}}"""
+    return wrapped
+
+
 def execute_csharp_code(code_to_run):
     """Execute C# code using dotnet"""
     try:
+        # Auto-wrap code if it doesn't have proper class structure
+        code_to_run = auto_wrap_csharp_code(code_to_run)
+        
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a simple console project
             project_result = subprocess.run(
@@ -1068,6 +1157,494 @@ def generate_syllabus():
         return jsonify({"error": f"Failed to generate syllabus content: {str(e)}"}), 500
 
 
+def get_language_structure_requirement(language, framework=None, is_selenium=False):
+    """
+    Returns mandatory code structure requirements for each language.
+    This ensures AI generates properly structured code that can be executed.
+    Includes support for Selenium sub-languages and various testing frameworks.
+    """
+    language_lower = language.lower() if language else 'python'
+    
+    # Base structures for regular programming
+    structures = {
+        'java': """
+        ⚠️ JAVA CODE STRUCTURE IS MANDATORY:
+        Java code MUST include the complete class structure to be executable.
+        Always wrap your code like this:
+        
+        public class Main {
+            public static void main(String[] args) {
+                // Your code goes here
+                System.out.println("Hello, World!");
+            }
+        }
+        
+        RULES:
+        - Class name MUST be 'Main' (with capital M)
+        - MUST have 'public class Main'
+        - MUST have 'public static void main(String[] args)'
+        - Use System.out.println() for output
+        - DO NOT use 'print()' - that's Python syntax!
+        """,
+        
+        'csharp': """
+        ⚠️ C# CODE STRUCTURE IS MANDATORY:
+        C# code MUST include the complete class structure to be executable.
+        Always wrap your code like this:
+        
+        using System;
+        
+        class Program {
+            static void Main() {
+                // Your code goes here
+                Console.WriteLine("Hello, World!");
+            }
+        }
+        
+        RULES:
+        - Include 'using System;' at the top
+        - Class name should be 'Program'
+        - MUST have 'static void Main()'
+        - Use Console.WriteLine() for output
+        - DO NOT use 'print()' - that's Python syntax!
+        """,
+        
+        'python': """
+        ✅ PYTHON CODE:
+        Python code can be written directly without class wrapping.
+        Use print() for output.
+        Example: print("Hello, World!")
+        """,
+        
+        'javascript': """
+        ✅ JAVASCRIPT CODE:
+        JavaScript code can be written directly without class wrapping.
+        Use console.log() for output.
+        Example: console.log("Hello, World!");
+        """
+    }
+    
+    # Selenium-specific structures for different sub-languages and frameworks
+    selenium_structures = {
+        'python': {
+            'default': """
+            ✅ PYTHON SELENIUM CODE:
+            from selenium import webdriver
+            from selenium.webdriver.common.by import By
+            
+            driver = webdriver.Chrome()
+            driver.get('https://example.com')
+            print('Page title:', driver.title)
+            driver.quit()
+            
+            RULES:
+            - Import webdriver and By from selenium
+            - Always quit() the driver at the end
+            - Use print() for output
+            """,
+            'pytest': """
+            ✅ PYTHON SELENIUM WITH PYTEST:
+            import pytest
+            from selenium import webdriver
+            from selenium.webdriver.common.by import By
+            
+            class TestExample:
+                def setup_method(self):
+                    self.driver = webdriver.Chrome()
+                
+                def test_page_title(self):
+                    self.driver.get('https://example.com')
+                    assert 'Example' in self.driver.title
+                
+                def teardown_method(self):
+                    self.driver.quit()
+            
+            RULES:
+            - Use pytest fixtures or setup_method/teardown_method
+            - Test functions must start with 'test_'
+            - Use assert statements for validations
+            - Class names should start with 'Test'
+            """,
+            'unittest': """
+            ✅ PYTHON SELENIUM WITH UNITTEST:
+            import unittest
+            from selenium import webdriver
+            from selenium.webdriver.common.by import By
+            
+            class TestExample(unittest.TestCase):
+                def setUp(self):
+                    self.driver = webdriver.Chrome()
+                
+                def test_page_title(self):
+                    self.driver.get('https://example.com')
+                    self.assertIn('Example', self.driver.title)
+                
+                def tearDown(self):
+                    self.driver.quit()
+            
+            if __name__ == '__main__':
+                unittest.main()
+            
+            RULES:
+            - Class must inherit from unittest.TestCase
+            - Use setUp() and tearDown() for lifecycle
+            - Use self.assertEqual, self.assertIn, etc. for assertions
+            - Test methods must start with 'test_'
+            """,
+            'Robot Framework': """
+            ✅ ROBOT FRAMEWORK SELENIUM CODE:
+            *** Settings ***
+            Library    SeleniumLibrary
+            
+            *** Test Cases ***
+            Example Test
+                Open Browser    https://example.com    chrome
+                Title Should Contain    Example
+                Close Browser
+            
+            RULES:
+            - Use *** Settings *** to import SeleniumLibrary
+            - Use *** Test Cases *** for test definitions
+            - Keywords are space-separated
+            - Use 4 spaces for argument separation
+            """
+        },
+        'java': {
+            'default': """
+            ⚠️ JAVA SELENIUM CODE STRUCTURE IS MANDATORY:
+            import org.openqa.selenium.WebDriver;
+            import org.openqa.selenium.chrome.ChromeDriver;
+            
+            public class Main {
+                public static void main(String[] args) {
+                    WebDriver driver = new ChromeDriver();
+                    driver.get("https://example.com");
+                    System.out.println("Title: " + driver.getTitle());
+                    driver.quit();
+                }
+            }
+            
+            RULES:
+            - MUST have 'public class Main' or test class name
+            - Import WebDriver and browser driver classes
+            - Always call driver.quit() at the end
+            """,
+            'TestNG': """
+            ⚠️ JAVA SELENIUM WITH TESTNG - CLASS STRUCTURE MANDATORY:
+            import org.openqa.selenium.WebDriver;
+            import org.openqa.selenium.chrome.ChromeDriver;
+            import org.testng.Assert;
+            import org.testng.annotations.*;
+            
+            public class ExampleTest {
+                private WebDriver driver;
+                
+                @BeforeMethod
+                public void setUp() {
+                    driver = new ChromeDriver();
+                }
+                
+                @Test
+                public void testPageTitle() {
+                    driver.get("https://example.com");
+                    Assert.assertTrue(driver.getTitle().contains("Example"));
+                }
+                
+                @AfterMethod
+                public void tearDown() {
+                    driver.quit();
+                }
+            }
+            
+            RULES:
+            - MUST have public class with a name (e.g., ExampleTest)
+            - Use @BeforeMethod, @AfterMethod for setup/teardown
+            - Use @Test annotation for test methods
+            - Use Assert.assertEquals, Assert.assertTrue for validations
+            """,
+            'JUnit': """
+            ⚠️ JAVA SELENIUM WITH JUNIT - CLASS STRUCTURE MANDATORY:
+            import org.openqa.selenium.WebDriver;
+            import org.openqa.selenium.chrome.ChromeDriver;
+            import org.junit.jupiter.api.*;
+            import static org.junit.jupiter.api.Assertions.*;
+            
+            public class ExampleTest {
+                private WebDriver driver;
+                
+                @BeforeEach
+                void setUp() {
+                    driver = new ChromeDriver();
+                }
+                
+                @Test
+                void testPageTitle() {
+                    driver.get("https://example.com");
+                    assertTrue(driver.getTitle().contains("Example"));
+                }
+                
+                @AfterEach
+                void tearDown() {
+                    driver.quit();
+                }
+            }
+            
+            RULES:
+            - MUST have public class with a name
+            - Use @BeforeEach, @AfterEach for lifecycle (JUnit 5)
+            - Use @Test annotation for test methods
+            - Use Assertions.assertEquals, assertTrue, etc.
+            """,
+            'Cucumber': """
+            ⚠️ JAVA CUCUMBER/BDD - CLASS STRUCTURE MANDATORY:
+            // Step Definitions file
+            import io.cucumber.java.en.*;
+            import org.openqa.selenium.WebDriver;
+            import org.openqa.selenium.chrome.ChromeDriver;
+            import static org.junit.Assert.*;
+            
+            public class StepDefinitions {
+                private WebDriver driver;
+                
+                @Given("I open the browser")
+                public void openBrowser() {
+                    driver = new ChromeDriver();
+                }
+                
+                @When("I navigate to {string}")
+                public void navigateTo(String url) {
+                    driver.get(url);
+                }
+                
+                @Then("the title should contain {string}")
+                public void verifyTitle(String expected) {
+                    assertTrue(driver.getTitle().contains(expected));
+                    driver.quit();
+                }
+            }
+            
+            RULES:
+            - MUST have public class for step definitions
+            - Use @Given, @When, @Then annotations
+            - Pair with .feature files for Gherkin scenarios
+            """
+        },
+        'javascript': {
+            'default': """
+            ✅ JAVASCRIPT SELENIUM CODE:
+            const { Builder, By, until } = require('selenium-webdriver');
+            
+            async function run() {
+                let driver = await new Builder().forBrowser('chrome').build();
+                try {
+                    await driver.get('https://example.com');
+                    console.log('Title:', await driver.getTitle());
+                } finally {
+                    await driver.quit();
+                }
+            }
+            run();
+            
+            RULES:
+            - Use async/await for Selenium operations
+            - Wrap in try/finally to ensure driver.quit()
+            - Use console.log() for output
+            """,
+            'Mocha': """
+            ✅ JAVASCRIPT SELENIUM WITH MOCHA:
+            const { Builder, By, until } = require('selenium-webdriver');
+            const assert = require('assert');
+            
+            describe('Example Test', function() {
+                let driver;
+                this.timeout(30000);
+                
+                beforeEach(async function() {
+                    driver = await new Builder().forBrowser('chrome').build();
+                });
+                
+                it('should have correct title', async function() {
+                    await driver.get('https://example.com');
+                    const title = await driver.getTitle();
+                    assert(title.includes('Example'));
+                });
+                
+                afterEach(async function() {
+                    await driver.quit();
+                });
+            });
+            
+            RULES:
+            - Use describe() and it() blocks
+            - Use beforeEach/afterEach for setup/teardown
+            - Set appropriate timeout for Selenium operations
+            - Use async/await throughout
+            """,
+            'Jest': """
+            ✅ JAVASCRIPT SELENIUM WITH JEST:
+            const { Builder, By, until } = require('selenium-webdriver');
+            
+            describe('Example Test', () => {
+                let driver;
+                
+                beforeEach(async () => {
+                    driver = await new Builder().forBrowser('chrome').build();
+                }, 30000);
+                
+                afterEach(async () => {
+                    await driver.quit();
+                });
+                
+                test('should have correct title', async () => {
+                    await driver.get('https://example.com');
+                    const title = await driver.getTitle();
+                    expect(title).toContain('Example');
+                }, 30000);
+            });
+            
+            RULES:
+            - Use describe() and test() blocks
+            - Use Jest matchers like expect().toContain()
+            - Set timeout as second parameter to test/beforeEach
+            - Use async/await throughout
+            """
+        },
+        'csharp': {
+            'default': """
+            ⚠️ C# SELENIUM CODE STRUCTURE IS MANDATORY:
+            using OpenQA.Selenium;
+            using OpenQA.Selenium.Chrome;
+            using System;
+            
+            class Program {
+                static void Main() {
+                    IWebDriver driver = new ChromeDriver();
+                    driver.Navigate().GoToUrl("https://example.com");
+                    Console.WriteLine("Title: " + driver.Title);
+                    driver.Quit();
+                }
+            }
+            
+            RULES:
+            - MUST have class Program with static void Main()
+            - Use IWebDriver interface
+            - Use driver.Navigate().GoToUrl() for navigation
+            - Always call driver.Quit() at the end
+            """,
+            'NUnit': """
+            ⚠️ C# SELENIUM WITH NUNIT - CLASS STRUCTURE MANDATORY:
+            using OpenQA.Selenium;
+            using OpenQA.Selenium.Chrome;
+            using NUnit.Framework;
+            
+            [TestFixture]
+            public class ExampleTest {
+                private IWebDriver driver;
+                
+                [SetUp]
+                public void SetUp() {
+                    driver = new ChromeDriver();
+                }
+                
+                [Test]
+                public void TestPageTitle() {
+                    driver.Navigate().GoToUrl("https://example.com");
+                    Assert.That(driver.Title.Contains("Example"));
+                }
+                
+                [TearDown]
+                public void TearDown() {
+                    driver.Quit();
+                }
+            }
+            
+            RULES:
+            - MUST have [TestFixture] attribute on class
+            - Use [SetUp], [TearDown] for lifecycle
+            - Use [Test] attribute for test methods
+            - Use Assert.That, Assert.AreEqual for validations
+            """,
+            'MSTest': """
+            ⚠️ C# SELENIUM WITH MSTEST - CLASS STRUCTURE MANDATORY:
+            using OpenQA.Selenium;
+            using OpenQA.Selenium.Chrome;
+            using Microsoft.VisualStudio.TestTools.UnitTesting;
+            
+            [TestClass]
+            public class ExampleTest {
+                private IWebDriver driver;
+                
+                [TestInitialize]
+                public void SetUp() {
+                    driver = new ChromeDriver();
+                }
+                
+                [TestMethod]
+                public void TestPageTitle() {
+                    driver.Navigate().GoToUrl("https://example.com");
+                    Assert.IsTrue(driver.Title.Contains("Example"));
+                }
+                
+                [TestCleanup]
+                public void TearDown() {
+                    driver.Quit();
+                }
+            }
+            
+            RULES:
+            - MUST have [TestClass] attribute on class
+            - Use [TestInitialize], [TestCleanup] for lifecycle
+            - Use [TestMethod] attribute for test methods
+            - Use Assert.IsTrue, Assert.AreEqual for validations
+            """,
+            'SpecFlow': """
+            ⚠️ C# SELENIUM WITH SPECFLOW/BDD - CLASS STRUCTURE MANDATORY:
+            using OpenQA.Selenium;
+            using OpenQA.Selenium.Chrome;
+            using TechTalk.SpecFlow;
+            using NUnit.Framework;
+            
+            [Binding]
+            public class StepDefinitions {
+                private IWebDriver driver;
+                
+                [Given(@"I open the browser")]
+                public void OpenBrowser() {
+                    driver = new ChromeDriver();
+                }
+                
+                [When(@"I navigate to (.*)")]
+                public void NavigateTo(string url) {
+                    driver.Navigate().GoToUrl(url);
+                }
+                
+                [Then(@"the title should contain (.*)")]
+                public void VerifyTitle(string expected) {
+                    Assert.That(driver.Title.Contains(expected));
+                    driver.Quit();
+                }
+            }
+            
+            RULES:
+            - MUST have [Binding] attribute on class
+            - Use [Given], [When], [Then] for step definitions
+            - Pair with .feature files for Gherkin scenarios
+            """
+        }
+    }
+    
+    # If this is a Selenium request, return Selenium-specific structure
+    if is_selenium:
+        lang_selenium = selenium_structures.get(language_lower, selenium_structures.get('python'))
+        if framework:
+            framework_key = framework.replace(' ', '_') if framework else 'default'
+            return lang_selenium.get(framework, lang_selenium.get('default', ''))
+        return lang_selenium.get('default', '')
+    
+    # Return base language structure
+    return structures.get(language_lower, structures.get('python', ''))
+
+
 @app.route('/generate-lesson', methods=['POST'])
 def generate_lesson():
     data = request.get_json()
@@ -1284,6 +1861,8 @@ def generate_lesson():
         7. **Common Use Cases**: Practical scenarios
         
         **Code Example**: OPTIONAL - Only include if it truly helps illustrate the concept.
+        For purely conceptual topics like "History", "Introduction", "Overview", "Importance", etc.,
+        DO NOT include any code - just return an empty string "" for code_example.
         If no code is needed, set "code_example" to an empty string "".
         
         ═══════════════════════════════════════════════════════════════════
@@ -1293,8 +1872,11 @@ def generate_lesson():
         {{
             "lesson_type": "theory",
             "explanation": "A comprehensive, detailed explanation covering all key aspects of {concept}. Use markdown formatting: **bold** for emphasis, bullet points for lists, numbered lists for steps. Make this rich and informative (300-600 words).",
-            "code_example": "Optional: A simple illustrative example ONLY if it enhances understanding. Otherwise empty string. If included, keep it minimal and focused on the concept, not complex implementation."
+            "code_example": ""
         }}
+        
+        ⚠️ IMPORTANT: For theory lessons like history, overview, introduction, etc., 
+        always set code_example to empty string "". Do not force code where it's not needed!
         
         ⚠️ CRITICAL: Make the explanation RICH and COMPREHENSIVE. This is theory, so focus on deep understanding!
         """
@@ -1387,6 +1969,11 @@ def generate_lesson():
         {f"- Required imports: {import_statement}" if import_statement else ""}
         {f"- Use {assertion_style} for validations" if assertion_style and framework else ""}
         {f"- Include {lifecycle_methods}" if lifecycle_methods and framework else ""}
+        
+        ═══════════════════════════════════════════════════════════════════
+        🏗️ MANDATORY LANGUAGE-SPECIFIC CODE STRUCTURE
+        ═══════════════════════════════════════════════════════════════════
+        {get_language_structure_requirement(example_language, framework, is_selenium)}
         
         ═══════════════════════════════════════════════════════════════════
         ✅ VALIDATION CHECKLIST (Must pass ALL)
