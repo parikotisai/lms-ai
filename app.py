@@ -1659,7 +1659,15 @@ def generate_lesson():
     # *** PROGRESSIVE LEARNING: Extract difficulty, skill level, and lesson number ***
     difficulty = data.get('difficulty', 'Medium')
     skill_level = data.get('skillLevel', 'Intermediate')
-    lesson_number = extract_lesson_number(concept)  # NEW: Extract lesson position
+    
+    # NEW: Get lesson number from frontend (preferred) or extract from concept (fallback)
+    lesson_number = data.get('lessonNumber')
+    if lesson_number is None:
+        lesson_number = extract_lesson_number(concept)  # Fallback to extraction
+        print(f"[Lesson Number] Extracted from concept: {lesson_number}")
+    else:
+        print(f"[Lesson Number] Received from frontend: {lesson_number}")
+    
     lesson_type = detect_lesson_type(concept)  # NEW: Detect if theory or code-focused
     
     if not concept:
